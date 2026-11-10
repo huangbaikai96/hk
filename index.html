@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyMemory 翻譯 API 串接範例</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem 1rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, select:focus {
+            border-color: var(--primary-color);
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            flex: 1;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn:disabled {
+            background-color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        .result-box {
+            margin-top: 1.5rem;
+            padding: 1.25rem;
+            background-color: #f1f5f9;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+            min-height: 80px;
+        }
+
+        .result-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .result-text {
+            font-size: 1.125rem;
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .status {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>MyMemory 線上翻譯助手</h1>
+
+        <div class="form-group">
+            <label for="text-input">要翻譯的文字：</label>
+            <input type="text" id="text-input" value="Hello World" placeholder="請輸入文字...">
+        </div>
+
+        <div class="form-group">
+            <label for="lang-pair">語言對 (langpair)：</label>
+            <select id="lang-pair">
+                <option value="en|zh-TW">英文 ➔ 繁體中文 (en|zh-TW)</option>
+                <option value="zh-TW|en">繁體中文 ➔ 英文 (zh-TW|en)</option>
+                <option value="en|ja">英文 ➔ 日文 (en|ja)</option>
+            </select>
+        </div>
+
+        <div class="action-bar">
+            <button id="translate-btn" class="btn" onclick="translateText()">發送 API 翻譯</button>
+            <button id="reload-btn" class="btn btn-secondary" onclick="translateText()">重新抓取資料</button>
+        </div>
+
+        <div class="result-box">
+            <div class="result-title">翻譯結果：</div>
+            <div id="result-text" class="result-text">點擊按鈕進行翻譯...</div>
+        </div>
+
+        <div id="status" class="status">狀態：待命</div>
+    </div>
+
+    <script>
+        // API 基礎網址
+        const BASE_URL = 'https://api.mymemory.translated.net/get';
+
+        const textInput = document.getElementById('text-input');
+        const langPairSelect = document.getElementById('lang-pair');
+        const resultText = document.getElementById('result-text');
+        const statusEl = document.getElementById('status');
+        const translateBtn = document.getElementById('translate-btn');
+        const reloadBtn = document.getElementById('reload-btn');
+
+        // 使用 fetch 與 async/await 發送 GET 請求
+        async function translateText() {
+            const text = textInput.value.trim();
+            const langpair = langPairSelect.value;
+
+            if (!text) {
+                alert('請輸入要翻譯的文字！');
+                return;
+            }
+
+            // UI 狀態更新
+            setLoadingState(true);
+
+            try {
+                // 組合網址與查詢參數
+                const queryParams = new URLSearchParams({
+                    q: text,
+                    langpair: langpair
+                });
+
+                const requestUrl = `${BASE_URL}?${queryParams.toString()}`;
+                statusEl.textContent = '狀態：正在請求 API...';
+
+                // 發送 GET 請求
+                const response = await fetch(requestUrl);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤！狀態碼：${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // 檢查回應資料 structure (MyMemory 返回的翻譯結果在 responseData.translatedText)
+                if (data.responseData && data.responseData.translatedText) {
+                    resultText.textContent = data.responseData.translatedText;
+                    statusEl.textContent = `狀態：翻譯成功 (${new Date().toLocaleTimeString()})`;
+                } else {
+                    throw new Error('未取得有效的翻譯結果');
+                }
+
+            } catch (error) {
+                console.error('API 請求失敗：', error);
+                resultText.textContent = '翻譯失敗，請再試一次。';
+                statusEl.textContent = `狀態：錯誤 (${error.message})`;
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        // 設置按鈕停用與啟用狀態
+        function setLoadingState(isLoading) {
+            translateBtn.disabled = isLoading;
+            reloadBtn.disabled = isLoading;
+            if (isLoading) {
+                resultText.textContent = '抓取中...';
+            }
+        }
+
+        // 網頁開啓時自動預設執行一次（符合作業規格）
+        window.addEventListener('DOMContentLoaded', () => {
+            translateText();
+        });
+    </script>
+</body>
+</html>
+```[cite: 2]
